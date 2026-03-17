@@ -27,7 +27,7 @@
 # Options:
 #   --enable-npm-scan    Enable Node.js package scanning
 #   --disable-npm-scan   Disable Node.js package scanning
-#   --search-dir DIR     Add DIR to search paths (repeatable, appends to SEARCH_DIRS)
+#   --search-dirs DIR [DIR...]  Search DIRs instead of $HOME (replaces default; repeatable)
 #   --verbose            Show progress messages
 #   --color=WHEN         auto | always | never (default: auto)
 #   -v, --version        Show version
@@ -51,12 +51,13 @@ COLOR_MODE="auto"       # auto | always | never
 QUIET=true              # Suppress progress messages by default in community mode
 ENABLE_NODE_PACKAGE_SCAN="auto"  # auto | true | false
 
-# Directories to search for projects and extensions (space-separated)
+# Directories to search for projects and extensions (bash array)
 # Default: user's home directory. Customize as needed, e.g.:
-#   SEARCH_DIRS="$HOME /Volumes/code"                          # home + encrypted partition
-#   SEARCH_DIRS="/Volumes/code"                                # only encrypted partition
-#   SEARCH_DIRS="$HOME /Volumes/code /opt/work $HOME/project"  # multiple locations
-SEARCH_DIRS="\$HOME"
+#   SEARCH_DIRS=("\$HOME" "/Volumes/code")                          # home + encrypted partition
+#   SEARCH_DIRS=("/Volumes/code")                                   # only encrypted partition
+#   SEARCH_DIRS=("\$HOME" "/Volumes/code" "/opt/work")              # multiple locations
+SEARCH_DIRS=("\$HOME")
+_SEARCH_DIRS_SET=false
 
 #==============================================================================
 # STEPSECURITY ENTERPRISE CONFIGURATION
@@ -536,7 +537,7 @@ resolve_search_directories() {
     local user_home="$1"
     local resolved_dirs=()
 
-    for dir in $SEARCH_DIRS; do
+    for dir in "${SEARCH_DIRS[@]}"; do
         # Resolve $HOME to the actual user home directory
         local resolved="${dir/\$HOME/$user_home}"
         if [ -d "$resolved" ]; then
@@ -3607,7 +3608,7 @@ Output formats (community mode, mutually exclusive):
   --html FILE          HTML report saved to FILE
 
 Options:
-  --search-dir DIR     Add DIR to search paths (repeatable, appends to SEARCH_DIRS)
+  --search-dirs DIR [DIR...]  Search DIRs instead of \$HOME (replaces default; repeatable)
   --enable-npm-scan    Enable Node.js package scanning
   --disable-npm-scan   Disable Node.js package scanning
   --verbose            Show progress messages (suppressed by default)
@@ -3621,7 +3622,9 @@ Examples:
   $(basename "$0") --json > scan.json               # JSON to file
   $(basename "$0") --html report.html               # HTML report
   $(basename "$0") --verbose --enable-npm-scan      # Verbose with npm scan
-  $(basename "$0") --search-dir /Volumes/code       # Also search /Volumes/code
+  $(basename "$0") --search-dirs /Volumes/code                          # Search only /Volumes/code
+  $(basename "$0") --search-dirs /tmp /opt                              # Multiple dirs, one flag
+  $(basename "$0") --search-dirs "/path/with spaces" --search-dirs /opt # Mixed styles
   $(basename "$0") send-telemetry                   # Enterprise telemetry
 
 https://github.com/step-security/dev-machine-guard
@@ -3677,13 +3680,20 @@ while [ $# -gt 0 ]; do
             fi
             shift
             ;;
-        --search-dir)
-            if [ -z "${2:-}" ]; then
-                print_error "--search-dir requires a directory path argument"
+        --search-dirs)
+            shift
+            if [ $# -eq 0 ] || [[ "$1" == --* ]]; then
+                print_error "--search-dirs requires at least one directory path argument"
                 exit 1
             fi
-            SEARCH_DIRS="${SEARCH_DIRS} $2"
-            shift 2
+            if [ "$_SEARCH_DIRS_SET" = false ]; then
+                SEARCH_DIRS=()
+                _SEARCH_DIRS_SET=true
+            fi
+            while [ $# -gt 0 ] && [[ "$1" != --* ]]; do
+                SEARCH_DIRS+=("$1")
+                shift
+            done
             ;;
         --verbose)
             QUIET=false
