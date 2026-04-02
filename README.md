@@ -1,5 +1,7 @@
 # DevGuard Scanner
 
+![DevGaurd](/devguard-grokenhanced-best.png)
+
 A clean, fast, modular developer environment scanner for **Linux + macOS**.
 
 Scans:
@@ -22,6 +24,9 @@ chmod +x devguard.sh
 ```
 
 ### About this project
+
+![DevGaurd](/devguard-searching-packages.png)
+
 Inspired by [StepSecurity Dev Machine Guard](https://github.com/step-security/dev-machine-guard).
 
 This version has vastly pivoted and is deliberately much simpler:
