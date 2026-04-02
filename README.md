@@ -2,7 +2,10 @@
 
 ![DevGaurd](/devguard-grokenhanced-best.png)
 
-Clean, fast, and modular developer environment inspector for **Arch Linux + macOS**. It **inspects** your Node.js dependencies (npm, pnpm, bun, yarn), nvm/mise versions, IDE extensions (including VS Code OSS), AI coding agents & tools, **analyzes**, lists dependencies, *detects* tools, and even **looks into** git history of lockfiles.
+Clean, fast, and modular developer environment 
+inspector for **Arch Linux + macOS**. 
+
+It **inspects** your Node.js dependencies (npm, pnpm, bun, yarn), nvm/mise versions, IDE extensions (including VS Code OSS), AI coding agents & tools, **analyzes**, *lists* dependencies, *detects* tools, and even **looks into** git history of **lockfiles**.
 
 ### Features
 
