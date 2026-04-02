@@ -2,6 +2,7 @@
 # =============================================================================
 # DevGuard Scanner - Clean, Modular, Extensible Edition
 # Now includes `code` (VS Code CLI) in AI Coding Agents & Tools
+# & includes yarn.lock in the search (classic + Berry)
 # Scans ~/.vscode-oss/extensions too
 # Shows actual version when --package is used without --version
 # =============================================================================
@@ -71,8 +72,14 @@ scan_node() {
             print "${DIM}Searching for any ${PACKAGE_NAME} (showing actual version)${RESET}"
         fi
 
-        find ~ -type f \( -name package-lock.json -o -name pnpm-lock.yaml -o -name bun.lockb -o -name package.json \) \
-            -not -path "*/Trash/*" -not -path "*/node_modules/*" 2>/dev/null | while read -r f; do
+        find ~ -type f \( \
+            -name package-lock.json -o \
+            -name pnpm-lock.yaml -o \
+            -name bun.lockb -o \
+            -name yarn.lock -o \
+            -name package.json \
+        \) -not -path "*/Trash/*" -not -path "*/node_modules/*" 2>/dev/null | while read -r f; do
+
             if grep -qE "$pattern" "$f" 2>/dev/null; then
                 if [ -z "$PACKAGE_VERSION" ]; then
                     version=$(grep -oE "${PACKAGE_NAME}[^\"']*[\"']?\s*:\s*[\"']?[^\"',}]+" "$f" 2>/dev/null | head -1 || echo "unknown")
@@ -127,7 +134,6 @@ detect_ide_extensions() {
 
 detect_ai_agents() {
     print "${BOLD}→ AI Coding Agents & Tools${RESET}"
-    # Added `code` (VS Code CLI) as requested
     local tools=("claude" "cursor" "aider" "copilot" "windsurf" "zed" "ollama" "lm-studio" "codeium" "code")
 
     for t in "${tools[@]}"; do
