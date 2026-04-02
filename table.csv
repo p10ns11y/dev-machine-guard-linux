@@ -1,0 +1,9 @@
+Option,Description,Default
+--package NAME,Package name to search for,—
+--version REGEX,Version regex (optional),—
+--node / --no-node,Enable/disable Node.js scanning,on
+--ide / --no-ide,Enable/disable IDE extensions,on
+--ai / --no-ai,Enable/disable AI tools,on
+--add-detector FILE,Load extra detector script (can be repeated),—
+--quiet,Suppress progress messages,off
+"-h, --help",Show this help,—

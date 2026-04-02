@@ -4,13 +4,16 @@
 
 A clean, fast, modular developer environment scanner for **Linux + macOS**.
 
-Scans:
-- Node.js dependencies (npm, pnpm, bun, yarn)
-- nvm + mise Node versions
-- IDE extensions (including VS Code OSS)
-- AI coding agents and tools
+### Features
 
-### Quick Start
+- Node.js dependency scanning (npm, pnpm, bun, yarn)
+- Full support for nvm and mise
+- IDE extensions detection (including VS Code OSS)
+- AI coding agents and tools
+- Optional Git history analysis for lockfiles
+- Highly extensible via separate detector files
+
+### Quick Install
 
 ```bash
 # 1. Save the script
@@ -19,9 +22,40 @@ curl -fsSL -o devguard.sh https://raw.githubusercontent.com/p10ns11y/dev-machine
 # 2. Make executable
 chmod +x devguard.sh
 
-# 3. Run it
-./devguard.sh
+# 3. Test
+./devguard.sh --package axios
 ```
+
+### Basic Usage Examples
+
+```bash
+# Basic package search
+./devguard.sh --package axios
+
+# Search with specific version
+./devguard.sh --package axios --version "1\.14\.1|0\.30\.4"
+
+# Include git history (recommended for security checks)
+./devguard.sh --package axios --add-detector ./git-history-search.sh
+
+# Run only specific sections
+./devguard.sh --node
+./devguard.sh --ide
+./devguard.sh --ai
+```
+
+### Options
+
+| Option              | Description                                  | Default |
+|---------------------|----------------------------------------------|---------|
+| --package NAME      | Package name to search for                   | —       |
+| --version REGEX     | Version regex (optional)                     | —       |
+| --node / --no-node  | Enable/disable Node.js scanning              | on      |
+| --ide / --no-ide    | Enable/disable IDE extensions                | on      |
+| --ai / --no-ai      | Enable/disable AI tools                      | on      |
+| --add-detector FILE | Load extra detector script (can be repeated) | —       |
+| --quiet             | Suppress progress messages                   | off     |
+| -h, --help          | Show this help                               | —       |
 
 ### About this project
 
@@ -29,15 +63,12 @@ chmod +x devguard.sh
 
 Inspired by [StepSecurity Dev Machine Guard](https://github.com/step-security/dev-machine-guard).
 
-This version has vastly pivoted and is deliberately much simpler:
 
-100% local (no telemetry, no enterprise backend, no cloud login)
-Extremely clean and modular shell code (under 200 lines)
+This version has been vastly pivoted and simplified for better maintainability:
 
-Focused exactly on what you need: Node.js package scanning + IDE extensions + AI tools
+- 100% local — no telemetry, no backend, no cloud login
+- Extremely clean and modular code
+- Core script remains lightweight and readable
+- Extra features (like git history) are loaded dynamically via --add-detector
 
-Easy to read, extend, and maintain
-
-Works perfectly on Arch Linux (including ~/.vscode-oss) + macOS
-
-Made for developers who want a lightweight, trustworthy scanner without any extra complexity.
+Designed for developers who want a trustworthy, lightweight scanner without any bloat.
