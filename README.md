@@ -57,9 +57,14 @@ chmod +x devguard.sh
 | --quiet             | Suppress progress messages                   | off     |
 | -h, --help          | Show this help                               | —       |
 
-### About this project
+### Show: How it works
 
-![DevGaurd](/devguard-searching-packages.png)
+![DevGaurd Search](/devguard-searching-packages.png)
+
+![DevGaurd Git Histroy](/devguard-git-history-search.png)
+
+
+### About this project
 
 Inspired by [StepSecurity Dev Machine Guard](https://github.com/step-security/dev-machine-guard).
 
