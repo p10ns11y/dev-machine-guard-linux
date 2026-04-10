@@ -43,6 +43,7 @@ while [[ $# -gt 0 ]]; do
         --add-detector)   EXTRA_DETECTORS+=("$2"); shift 2 ;;
         --quiet)          QUIET=true; shift ;;
         --timeout)        TIMEOUT="$2"; shift 2 ;;
+        --color)          COLOR_MODE="$2"; shift 2 ;;
         -h|--help)
             cat <<EOF
 DevGuard Scanner
@@ -58,6 +59,7 @@ Options:
   --add-detector FILE        Load extra detector script (can be repeated)
   --quiet                    Suppress messages
   --timeout SECS             Command timeout (default: 30)
+  --color (auto|never)       Color output (default: auto, respects NO_COLOR)
   -h, --help                 Show help
 EOF
             exit 0
@@ -67,7 +69,14 @@ EOF
 done
 
 # ----------------------------- COLORS ----------------------------------------
-BOLD='\033[1m'; DIM='\033[2m'; GREEN='\033[32m'; RED='\033[31m'; RESET='\033[0m'
+apply_colors() {
+    if [[ "$COLOR_MODE" == "never" ]] || [[ -n "${NO_COLOR:-}" ]]; then
+        BOLD=''; DIM=''; GREEN=''; RED=''; RESET=''
+    else
+        BOLD='\033[1m'; DIM='\033[2m'; GREEN='\033[32m'; RED='\033[31m'; RESET='\033[0m'
+    fi
+}
+apply_colors
 print() { [ "$QUIET" = true ] && return; echo -e "$*"; }
 
 # ----------------------------- LOAD EXTRA DETECTORS --------------------------
