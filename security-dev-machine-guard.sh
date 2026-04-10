@@ -46,6 +46,7 @@ while [[ $# -gt 0 ]]; do
         --color)          COLOR_MODE="$2"; shift 2 ;;
         --json)           OUTPUT_FORMAT="json"; shift ;;
         --exclude-dir)    EXCLUDE_DIRS+=("$2"); shift 2 ;;
+        --dry-run)        DRY_RUN=true; shift ;;
         -h|--help)
             cat <<EOF
 DevGuard Scanner
@@ -64,6 +65,7 @@ Options:
   --color (auto|never)       Color output (default: auto, respects NO_COLOR)
   --json                     Output JSON summary
   --exclude-dir DIR          Exclude directory (can be repeated)
+  --dry-run                  Preview what would be scanned
   -h, --help                 Show help
 EOF
             exit 0
@@ -228,6 +230,17 @@ run_extra_detectors() {
 # MAIN
 # =============================================================================
 main() {
+    if [ "$DRY_RUN" = true ]; then
+        print "${BOLD}Dry run - would scan:${RESET}"
+        [ "$ENABLE_NODE" = true ] && print "  • Node.js packages (npm/pnpm/bun/yarn + nvm/mise)"
+        [ "$ENABLE_IDE" = true ] && print "  • IDE extensions"
+        [ "$ENABLE_AI" = true ] && print "  • AI coding agents"
+        [ -n "$PACKAGE_NAME" ] && print "  • Package: $PACKAGE_NAME${PACKAGE_VERSION:+" (version: $PACKAGE_VERSION)"}"
+        [ ${#EXCLUDE_DIRS[@]} -gt 0 ] && print "  • Excluding: ${EXCLUDE_DIRS[*]}"
+        print "\n${GREEN}✅ Dry run complete.${RESET}"
+        exit 0
+    fi
+
     print "${BOLD}DevGuard Scanner${RESET} | $(uname -s) | User: $USER"
     echo
 
