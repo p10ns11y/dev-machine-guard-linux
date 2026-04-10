@@ -155,7 +155,7 @@ scan_node() {
         while IFS= read -r root; do
             root=${root/#\~/$HOME}
             # shellcheck disable=SC2086
-            find "$root" -type f \(  \
+            timeout "$TIMEOUT" find "$root" -type f \(  \
                 -name package-lock.json -o \
                 -name pnpm-lock.yaml -o \
                 -name bun.lockb -o \
@@ -180,7 +180,7 @@ scan_node() {
         while IFS= read -r root; do
             root=${root/#\~/$HOME}
             # shellcheck disable=SC2086
-            find "$root" -name package.json $excl 2>/dev/null | while read -r pkg; do
+            timeout "$TIMEOUT" find "$root" -name package.json $excl 2>/dev/null | while read -r pkg; do
             dir=$(dirname "$pkg")
             print "${DIM}Project:${RESET} $dir"
             timeout "$TIMEOUT" bash -c "cd \"$dir\" && npm ls --depth=0" 2>/dev/null | tail -n +2 || true
