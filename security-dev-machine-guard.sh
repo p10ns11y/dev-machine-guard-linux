@@ -6,17 +6,23 @@
 
 set -euo pipefail
 
+CONFIG_FILE="${HOME}/.devguardrc"
+if [ -f "$CONFIG_FILE" ]; then
+    # shellcheck source=/dev/null
+    source "$CONFIG_FILE"
+fi
+
 # ----------------------------- CLI PARSING -----------------------------------
-PACKAGE_NAME=""
-PACKAGE_VERSION=""
-ENABLE_NODE=true
-ENABLE_IDE=true
-ENABLE_AI=true
-OUTPUT_FORMAT="pretty"
-QUIET=false
-COLOR_MODE="auto"
-TIMEOUT=30
-DRY_RUN=false
+PACKAGE_NAME="${PACKAGE_NAME:-}"
+PACKAGE_VERSION="${PACKAGE_VERSION:-}"
+ENABLE_NODE="${ENABLE_NODE:-true}"
+ENABLE_IDE="${ENABLE_IDE:-true}"
+ENABLE_AI="${ENABLE_AI:-true}"
+OUTPUT_FORMAT="${OUTPUT_FORMAT:-pretty}"
+QUIET="${QUIET:-false}"
+COLOR_MODE="${COLOR_MODE:-auto}"
+TIMEOUT="${TIMEOUT:-30}"
+DRY_RUN="${DRY_RUN:-false}"
 EXCLUDE_DIRS=()
 EXTRA_DETECTORS=()
 EXTRA_DETECTOR_FUNCTIONS=()
