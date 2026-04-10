@@ -44,6 +44,7 @@ while [[ $# -gt 0 ]]; do
         --quiet)          QUIET=true; shift ;;
         --timeout)        TIMEOUT="$2"; shift 2 ;;
         --color)          COLOR_MODE="$2"; shift 2 ;;
+        --json)           OUTPUT_FORMAT="json"; shift ;;
         -h|--help)
             cat <<EOF
 DevGuard Scanner
@@ -60,6 +61,7 @@ Options:
   --quiet                    Suppress messages
   --timeout SECS             Command timeout (default: 30)
   --color (auto|never)       Color output (default: auto, respects NO_COLOR)
+  --json                     Output JSON summary
   -h, --help                 Show help
 EOF
             exit 0
@@ -218,8 +220,12 @@ main() {
     [[ "$ENABLE_AI" == true ]] && detect_ai_agents
     run_extra_detectors   # ← calls any loaded detectors
 
-    print "\n${GREEN}✅ Scan complete.${RESET}"
-    print "${DIM}Run with --help for full options${RESET}"
+    if [ "$OUTPUT_FORMAT" = "json" ]; then
+        echo "{\"tool\":\"devguard\",\"package\":\"$PACKAGE_NAME\",\"status\":\"complete\"}"
+    else
+        print "\n${GREEN}✅ Scan complete.${RESET}"
+        print "${DIM}Run with --help for full options${RESET}"
+    fi
 }
 
 main
