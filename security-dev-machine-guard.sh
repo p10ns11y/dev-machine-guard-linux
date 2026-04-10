@@ -79,6 +79,20 @@ apply_colors() {
 apply_colors
 print() { [ "$QUIET" = true ] && return; echo -e "$*"; }
 
+# ----------------------------- INPUT VALIDATION ------------------------------
+sanitize_package_name() {
+    local pkg="$1"
+    if [[ ! "$pkg" =~ ^[a-zA-Z0-9@._/-]+$ ]]; then
+        print "${RED}Error: Invalid package name: $pkg${RESET}"
+        print "${DIM}Package names may only contain letters, numbers, @, ., _, -, /\n"
+        exit 1
+    fi
+}
+
+if [ -n "$PACKAGE_NAME" ]; then
+    sanitize_package_name "$PACKAGE_NAME"
+fi
+
 # ----------------------------- LOAD EXTRA DETECTORS --------------------------
 for detector in "${EXTRA_DETECTORS[@]}"; do
     if [ -f "$detector" ]; then
