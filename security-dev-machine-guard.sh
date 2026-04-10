@@ -150,18 +150,16 @@ scan_node() {
             print "${DIM}Searching for any ${PACKAGE_NAME} (showing actual version)${RESET}"
         fi
 
-        local excl root
+        local excl
         excl=$(exclude_args)
-        while IFS= read -r root; do
-            root=${root/#\~/$HOME}
-            # shellcheck disable=SC2086
-            timeout "$TIMEOUT" find "$root" -type f \(  \
-                -name package-lock.json -o \
-                -name pnpm-lock.yaml -o \
-                -name bun.lockb -o \
-                -name yarn.lock -o \
-                -name package.json \
-            \) $excl 2>/dev/null | while read -r f; do
+        # shellcheck disable=SC2086
+        find ~ -type f \(  \
+            -name package-lock.json -o \
+            -name pnpm-lock.yaml -o \
+            -name bun.lockb -o \
+            -name yarn.lock -o \
+            -name package.json \
+        \) $excl 2>/dev/null | while read -r f; do
 
             if grep -qE "$pattern" "$f" 2>/dev/null; then
                 if [ -z "$PACKAGE_VERSION" ]; then
@@ -172,19 +170,15 @@ scan_node() {
                 fi
             fi
         done
-        done
     else
         print "${DIM}Listing direct dependencies from all projects...${RESET}"
-        local excl root
+        local excl
         excl=$(exclude_args)
-        while IFS= read -r root; do
-            root=${root/#\~/$HOME}
-            # shellcheck disable=SC2086
-            timeout "$TIMEOUT" find "$root" -name package.json $excl 2>/dev/null | while read -r pkg; do
+        # shellcheck disable=SC2086
+        find ~ -name package.json $excl 2>/dev/null | while read -r pkg; do
             dir=$(dirname "$pkg")
             print "${DIM}Project:${RESET} $dir"
             timeout "$TIMEOUT" bash -c "cd \"$dir\" && npm ls --depth=0" 2>/dev/null | tail -n +2 || true
-        done
         done
     fi
 
