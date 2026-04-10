@@ -24,6 +24,7 @@ COLOR_MODE="${COLOR_MODE:-auto}"
 TIMEOUT="${TIMEOUT:-30}"
 DRY_RUN="${DRY_RUN:-false}"
 EXCLUDE_DIRS=()
+SEARCH_PATHS=()
 EXTRA_DETECTORS=()
 EXTRA_DETECTOR_FUNCTIONS=()
 
@@ -52,6 +53,7 @@ while [[ $# -gt 0 ]]; do
         --color)          COLOR_MODE="$2"; shift 2 ;;
         --json)           OUTPUT_FORMAT="json"; shift ;;
         --exclude-dir)    EXCLUDE_DIRS+=("$2"); shift 2 ;;
+        --search-path)    SEARCH_PATHS+=("$2"); shift 2 ;;
         --dry-run)        DRY_RUN=true; shift ;;
         -h|--help)
             cat <<EOF
@@ -71,6 +73,7 @@ Options:
   --color (auto|never)       Color output (default: auto, respects NO_COLOR)
   --json                     Output JSON summary
   --exclude-dir DIR          Exclude directory (can be repeated)
+  --search-path DIR          Search directory (can be repeated, default: ~)
   --dry-run                  Preview what would be scanned
   -h, --help                 Show help
 EOF
@@ -104,6 +107,14 @@ sanitize_package_name() {
 if [ -n "$PACKAGE_NAME" ]; then
     sanitize_package_name "$PACKAGE_NAME"
 fi
+
+get_search_root() {
+    if [ ${#SEARCH_PATHS[@]} -gt 0 ]; then
+        printf '%s\n' "${SEARCH_PATHS[@]}"
+    else
+        echo "~"
+    fi
+}
 
 exclude_args() {
     local args="-not -path '*/Trash/*' -not -path '*/node_modules/*'"
@@ -139,16 +150,18 @@ scan_node() {
             print "${DIM}Searching for any ${PACKAGE_NAME} (showing actual version)${RESET}"
         fi
 
-        local excl
+        local excl root
         excl=$(exclude_args)
-        # shellcheck disable=SC2086
-        find ~ -type f \(  \
-            -name package-lock.json -o \
-            -name pnpm-lock.yaml -o \
-            -name bun.lockb -o \
-            -name yarn.lock -o \
-            -name package.json \
-        \) $excl 2>/dev/null | while read -r f; do
+        while IFS= read -r root; do
+            root=${root/#\~/$HOME}
+            # shellcheck disable=SC2086
+            find "$root" -type f \(  \
+                -name package-lock.json -o \
+                -name pnpm-lock.yaml -o \
+                -name bun.lockb -o \
+                -name yarn.lock -o \
+                -name package.json \
+            \) $excl 2>/dev/null | while read -r f; do
 
             if grep -qE "$pattern" "$f" 2>/dev/null; then
                 if [ -z "$PACKAGE_VERSION" ]; then
@@ -159,15 +172,19 @@ scan_node() {
                 fi
             fi
         done
+        done
     else
         print "${DIM}Listing direct dependencies from all projects...${RESET}"
-        local excl
+        local excl root
         excl=$(exclude_args)
-        # shellcheck disable=SC2086
-        find ~ -name package.json $excl 2>/dev/null | while read -r pkg; do
+        while IFS= read -r root; do
+            root=${root/#\~/$HOME}
+            # shellcheck disable=SC2086
+            find "$root" -name package.json $excl 2>/dev/null | while read -r pkg; do
             dir=$(dirname "$pkg")
             print "${DIM}Project:${RESET} $dir"
             timeout "$TIMEOUT" bash -c "cd \"$dir\" && npm ls --depth=0" 2>/dev/null | tail -n +2 || true
+        done
         done
     fi
 
@@ -242,6 +259,7 @@ main() {
         [ "$ENABLE_IDE" = true ] && print "  • IDE extensions"
         [ "$ENABLE_AI" = true ] && print "  • AI coding agents"
         [ -n "$PACKAGE_NAME" ] && print "  • Package: $PACKAGE_NAME${PACKAGE_VERSION:+" (version: $PACKAGE_VERSION)"}"
+        [ ${#SEARCH_PATHS[@]} -gt 0 ] && print "  • Search paths: ${SEARCH_PATHS[*]}"
         [ ${#EXCLUDE_DIRS[@]} -gt 0 ] && print "  • Excluding: ${EXCLUDE_DIRS[*]}"
         print "\n${GREEN}✅ Dry run complete.${RESET}"
         exit 0
