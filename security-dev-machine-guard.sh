@@ -45,6 +45,7 @@ while [[ $# -gt 0 ]]; do
         --timeout)        TIMEOUT="$2"; shift 2 ;;
         --color)          COLOR_MODE="$2"; shift 2 ;;
         --json)           OUTPUT_FORMAT="json"; shift ;;
+        --exclude-dir)    EXCLUDE_DIRS+=("$2"); shift 2 ;;
         -h|--help)
             cat <<EOF
 DevGuard Scanner
@@ -62,6 +63,7 @@ Options:
   --timeout SECS             Command timeout (default: 30)
   --color (auto|never)       Color output (default: auto, respects NO_COLOR)
   --json                     Output JSON summary
+  --exclude-dir DIR          Exclude directory (can be repeated)
   -h, --help                 Show help
 EOF
             exit 0
@@ -95,6 +97,14 @@ if [ -n "$PACKAGE_NAME" ]; then
     sanitize_package_name "$PACKAGE_NAME"
 fi
 
+exclude_args() {
+    local args="-not -path '*/Trash/*' -not -path '*/node_modules/*'"
+    for d in "${EXCLUDE_DIRS[@]:-}"; do
+        args="$args -not -path '*/$d/*'"
+    done
+    echo "$args"
+}
+
 # ----------------------------- LOAD EXTRA DETECTORS --------------------------
 for detector in "${EXTRA_DETECTORS[@]}"; do
     if [ -f "$detector" ]; then
@@ -121,13 +131,16 @@ scan_node() {
             print "${DIM}Searching for any ${PACKAGE_NAME} (showing actual version)${RESET}"
         fi
 
+        local excl
+        excl=$(exclude_args)
+        # shellcheck disable=SC2086
         find ~ -type f \(  \
             -name package-lock.json -o \
             -name pnpm-lock.yaml -o \
             -name bun.lockb -o \
             -name yarn.lock -o \
             -name package.json \
-        \) -not -path "*/Trash/*" -not -path "*/node_modules/*" 2>/dev/null | while read -r f; do
+        \) $excl 2>/dev/null | while read -r f; do
 
             if grep -qE "$pattern" "$f" 2>/dev/null; then
                 if [ -z "$PACKAGE_VERSION" ]; then
@@ -140,7 +153,10 @@ scan_node() {
         done
     else
         print "${DIM}Listing direct dependencies from all projects...${RESET}"
-        find ~ -name package.json -not -path "*/node_modules/*" -not -path "*/Trash/*" 2>/dev/null | while read -r pkg; do
+        local excl
+        excl=$(exclude_args)
+        # shellcheck disable=SC2086
+        find ~ -name package.json $excl 2>/dev/null | while read -r pkg; do
             dir=$(dirname "$pkg")
             print "${DIM}Project:${RESET} $dir"
             timeout "$TIMEOUT" bash -c "cd \"$dir\" && npm ls --depth=0" 2>/dev/null | tail -n +2 || true
