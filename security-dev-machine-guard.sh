@@ -14,8 +14,21 @@ ENABLE_IDE=true
 ENABLE_AI=true
 OUTPUT_FORMAT="pretty"
 QUIET=false
+COLOR_MODE="auto"
+TIMEOUT=30
+DRY_RUN=false
+EXCLUDE_DIRS=()
 EXTRA_DETECTORS=()
 EXTRA_DETECTOR_FUNCTIONS=()
+
+command_timeout() {
+    local secs="${1:-30}"
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "$secs" "$2" "${@:3}"
+    else
+        "$2" "${@:3}"
+    fi
+}
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -29,6 +42,7 @@ while [[ $# -gt 0 ]]; do
         --no-ai)          ENABLE_AI=false; shift ;;
         --add-detector)   EXTRA_DETECTORS+=("$2"); shift 2 ;;
         --quiet)          QUIET=true; shift ;;
+        --timeout)        TIMEOUT="$2"; shift 2 ;;
         -h|--help)
             cat <<EOF
 DevGuard Scanner
@@ -43,6 +57,7 @@ Options:
   --ai / --no-ai             AI tools
   --add-detector FILE        Load extra detector script (can be repeated)
   --quiet                    Suppress messages
+  --timeout SECS             Command timeout (default: 30)
   -h, --help                 Show help
 EOF
             exit 0
@@ -103,22 +118,22 @@ scan_node() {
         find ~ -name package.json -not -path "*/node_modules/*" -not -path "*/Trash/*" 2>/dev/null | while read -r pkg; do
             dir=$(dirname "$pkg")
             print "${DIM}Project:${RESET} $dir"
-            (cd "$dir" && npm ls --depth=0 2>/dev/null | tail -n +2) || true
+            timeout "$TIMEOUT" bash -c "cd \"$dir\" && npm ls --depth=0" 2>/dev/null | tail -n +2 || true
         done
     fi
 
     print "${DIM}Global packages across nvm + mise...${RESET}"
     if command -v nvm >/dev/null 2>&1; then
-        for ver in $(nvm ls --no-colors 2>/dev/null | grep -E 'v[0-9]' | awk '{print $1}'); do
-            nvm use "$ver" --silent 2>/dev/null || continue
+        for ver in $(timeout "$TIMEOUT" nvm ls --no-colors 2>/dev/null | grep -E 'v[0-9]' | awk '{print $1}'); do
+            timeout "$TIMEOUT" nvm use "$ver" --silent 2>/dev/null || continue
             echo "→ nvm $ver"
-            npm ls -g --depth=0 2>/dev/null | tail -n +2 || true
+            timeout "$TIMEOUT" npm ls -g --depth=0 2>/dev/null | tail -n +2 || true
         done
     fi
     if command -v mise >/dev/null 2>&1; then
-        for ver in $(mise ls node --installed 2>/dev/null | awk '{print $1}'); do
+        for ver in $(timeout "$TIMEOUT" mise ls node --installed 2>/dev/null | awk '{print $1}'); do
             echo "→ mise $ver"
-            mise exec "node@$ver" -- npm ls -g --depth=0 2>/dev/null | tail -n +2 || true
+            timeout "$TIMEOUT" mise exec "node@$ver" -- npm ls -g --depth=0 2>/dev/null | tail -n +2 || true
         done
     fi
 }
