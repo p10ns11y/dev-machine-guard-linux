@@ -5,14 +5,20 @@
 # =============================================================================
 
 set -euo pipefail
+shopt -s inherit_ubsan 2>/dev/null || true
 
 INTERRUPTED=false
-trap 'INTERRUPTED=true' INT
-trap 'INTERRUPTED=true' TERM
+interrupt_handler() {
+    INTERRUPTED=true
+    touch /tmp/devguard_interrupted
+    echo -e "${YELLOW}⚠️  Scan interrupted by user. Cleaning up...${RESET}" >&2
+    exit 130
+}
+trap 'interrupt_handler' INT TERM
 
 check_interrupt() {
-    if [ "$INTERRUPTED" = true ]; then
-        print "${YELLOW}⚠️  Scan interrupted by user.${RESET}"
+    if [ -f /tmp/devguard_interrupted ]; then
+        echo -e "${YELLOW}⚠️  Scan interrupted by user.${RESET}" >&2
         exit 130
     fi
 }

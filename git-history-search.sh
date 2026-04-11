@@ -9,6 +9,11 @@ scan_git_history() {
 
     print "${DIM}→ Checking git history of lockfiles for ${PACKAGE_NAME}...${RESET}"
 
+    if [ -f /tmp/devguard_interrupted ]; then
+        print "${YELLOW}⚠️  Scan interrupted by user.${RESET}"
+        return 130
+    fi
+
     local search_root
     search_root=$(get_search_root)
 
@@ -16,13 +21,20 @@ scan_git_history() {
     excl=$(exclude_args)
     # shellcheck disable=SC2086
     for search_path in $search_root; do
-        find "$search_path" -type f \( -name package-lock.json -o -name pnpm-lock.yaml -o -name bun.lockb -o -name yarn.lock \) \
-            $excl 2>/dev/null | while read -r lockfile; do
+        while IFS= read -r lockfile; do
+            if [ -f /tmp/devguard_interrupted ]; then
+                print "${YELLOW}⚠️  Scan interrupted by user.${RESET}"
+                return 130
+            fi
 
             dir=$(dirname "$lockfile")
             [ -d "$dir/.git" ] || continue
 
-            timeout "${TIMEOUT:-30}" git -C "$dir" log --oneline -S "$PACKAGE_NAME" -- "$lockfile" 2>/dev/null | head -8 | while read -r commit_line; do
+            timeout "${TIMEOUT:-30}" git -C "$dir" log --oneline -S "$PACKAGE_NAME" -- "$lockfile" 2>/dev/null | head -8 | while IFS= read -r commit_line; do
+                if [ -f /tmp/devguard_interrupted ]; then
+                    print "${YELLOW}⚠️  Scan interrupted by user.${RESET}"
+                    return 130
+                fi
                 commit=$(echo "$commit_line" | awk '{print $1}')
                 message=$(echo "$commit_line" | cut -d' ' -f2-)
                 date=$(timeout "${TIMEOUT:-30}" git -C "$dir" show -s --format=%cd --date=short "$commit" 2>/dev/null)
@@ -36,7 +48,8 @@ scan_git_history() {
                     echo
                 fi
             done
-        done
+        done < <(find "$search_path" -type f \( -name package-lock.json -o -name pnpm-lock.yaml -o -name bun.lockb -o -name yarn.lock \) \
+            $excl 2>/dev/null)
     done
 }
 
