@@ -41,6 +41,7 @@ COLOR_MODE="${COLOR_MODE:-auto}"
 TIMEOUT="${TIMEOUT:-30}"
 DRY_RUN="${DRY_RUN:-false}"
 SCAN_ALL_MODE="${SCAN_ALL_MODE:-false}"
+LIMIT="${LIMIT:-0}"
 EXCLUDE_DIRS=()
 SEARCH_PATHS=()
 EXTRA_DETECTORS=()
@@ -74,6 +75,7 @@ while [[ $# -gt 0 ]]; do
         --search-path)    SEARCH_PATHS+=("$2"); shift 2 ;;
         --dry-run)        DRY_RUN=true; shift ;;
         --all)           SCAN_ALL_MODE=true; shift ;;
+        --limit)          LIMIT="$2"; shift 2 ;;
         -h|--help)
             cat <<EOF
 DevGuard Scanner
@@ -95,6 +97,7 @@ Options:
   --search-path DIR          Search directory (can be repeated, default: ~)
   --dry-run                  Preview what would be scanned
   --all                     Scan all projects (lists all packages)
+  --limit N                 Limit projects to scan (use with --all)
   -h, --help                 Show help
 EOF
             exit 0
@@ -149,7 +152,7 @@ get_search_root() {
 exclude_args() {
     local args="-not -path '*/Trash/*' -not -path '*/node_modules/*'"
     for d in "${EXCLUDE_DIRS[@]:-}"; do
-        args="$args -not -path '*/$d/*'"
+        [ -n "$d" ] && args="$args -not -path '*/$d/*'"
     done
     echo "$args"
 }
@@ -203,13 +206,20 @@ scan_node() {
                 fi
             fi
         done
-    else
-        print "${DIM}Listing direct dependencies from all projects...${RESET}"
+else
+        if [ "$LIMIT" -gt 0 ] 2>/dev/null; then
+            print "${DIM}Listing direct dependencies (limited to ${LIMIT} projects)...${RESET}"
+        else
+            print "${DIM}Listing direct dependencies from all projects...${RESET}"
+        fi
         local excl
         excl=$(exclude_args)
+        local count=0
         # shellcheck disable=SC2086
-        find ~ -name package.json $excl 2>/dev/null | while read -r pkg; do
+        for pkg in $(find ~ -name package.json $excl 2>/dev/null); do
             check_interrupt
+            [ "$LIMIT" -gt 0 ] 2>/dev/null && [ "$count" -ge "$LIMIT" ] && break
+            count=$((count + 1))
             dir=$(dirname "$pkg")
             print "${DIM}Project:${RESET} $dir"
             timeout "$TIMEOUT" bash -c "cd \"$dir\" && npm ls --depth=0" 2>/dev/null | tail -n +2 || true
