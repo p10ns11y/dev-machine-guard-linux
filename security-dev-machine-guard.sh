@@ -6,6 +6,17 @@
 
 set -euo pipefail
 
+INTERRUPTED=false
+trap 'INTERRUPTED=true' INT
+trap 'INTERRUPTED=true' TERM
+
+check_interrupt() {
+    if [ "$INTERRUPTED" = true ]; then
+        print "${YELLOW}⚠️  Scan interrupted by user.${RESET}"
+        exit 130
+    fi
+}
+
 CONFIG_FILE="${HOME}/.devguardrc"
 if [ -f "$CONFIG_FILE" ]; then
     # shellcheck source=/dev/null
@@ -23,6 +34,7 @@ QUIET="${QUIET:-false}"
 COLOR_MODE="${COLOR_MODE:-auto}"
 TIMEOUT="${TIMEOUT:-30}"
 DRY_RUN="${DRY_RUN:-false}"
+SCAN_ALL_MODE="${SCAN_ALL_MODE:-false}"
 EXCLUDE_DIRS=()
 SEARCH_PATHS=()
 EXTRA_DETECTORS=()
@@ -55,6 +67,7 @@ while [[ $# -gt 0 ]]; do
         --exclude-dir)    EXCLUDE_DIRS+=("$2"); shift 2 ;;
         --search-path)    SEARCH_PATHS+=("$2"); shift 2 ;;
         --dry-run)        DRY_RUN=true; shift ;;
+        --all)           SCAN_ALL_MODE=true; shift ;;
         -h|--help)
             cat <<EOF
 DevGuard Scanner
@@ -75,6 +88,7 @@ Options:
   --exclude-dir DIR          Exclude directory (can be repeated)
   --search-path DIR          Search directory (can be repeated, default: ~)
   --dry-run                  Preview what would be scanned
+  --all                     Scan all projects (lists all packages)
   -h, --help                 Show help
 EOF
             exit 0
@@ -88,13 +102,23 @@ apply_colors() {
     if [[ "$COLOR_MODE" == "never" ]] || [[ -n "${NO_COLOR:-}" ]]; then
         BOLD=''; DIM=''; GREEN=''; RED=''; RESET=''
     else
-        BOLD='\033[1m'; DIM='\033[2m'; GREEN='\033[32m'; RED='\033[31m'; RESET='\033[0m'
+        BOLD='\033[1m'; DIM='\033[2m'; GREEN='\033[32m'; RED='\033[31m'; YELLOW='\033[33m'; RESET='\033[0m'
     fi
 }
 apply_colors
 print() { [ "$QUIET" = true ] && return; echo -e "$*"; }
 
 # ----------------------------- INPUT VALIDATION ------------------------------
+if [ "$SCAN_ALL_MODE" = false ] && [ -z "$PACKAGE_NAME" ]; then
+    echo "Error: No package specified. Use --package NAME or --all to scan everything."
+    echo "       Run with --help for full options."
+    exit 1
+fi
+
+if [ "$SCAN_ALL_MODE" = true ]; then
+    print "${DIM}⚠️  Full scan mode enabled - this may take a while. Press Ctrl+C to cancel.${RESET}"
+fi
+
 sanitize_package_name() {
     local pkg="$1"
     if [[ ! "$pkg" =~ ^[a-zA-Z0-9@._/-]+$ ]]; then
@@ -162,6 +186,7 @@ scan_node() {
             -name yarn.lock -o \
             -name package.json \
         \) $excl 2>/dev/null | while read -r f; do
+            check_interrupt
 
             if grep -qE "$pattern" "$f" 2>/dev/null; then
                 if [ -z "$PACKAGE_VERSION" ]; then
@@ -178,6 +203,7 @@ scan_node() {
         excl=$(exclude_args)
         # shellcheck disable=SC2086
         find ~ -name package.json $excl 2>/dev/null | while read -r pkg; do
+            check_interrupt
             dir=$(dirname "$pkg")
             print "${DIM}Project:${RESET} $dir"
             timeout "$TIMEOUT" bash -c "cd \"$dir\" && npm ls --depth=0" 2>/dev/null | tail -n +2 || true
@@ -188,6 +214,7 @@ scan_node() {
     if [ -d "${NVM_DIR:-$HOME/.nvm}" ]; then
         nvm_dir="${NVM_DIR:-$HOME/.nvm}"
         for ver in "$nvm_dir"/versions/node/*; do
+            check_interrupt
             [ -d "$ver" ] || continue
             ver_name=$(basename "$ver")
             echo "→ nvm $ver_name"
@@ -197,6 +224,7 @@ scan_node() {
     fi
     if command -v mise >/dev/null 2>&1; then
         for ver in $(timeout "$TIMEOUT" mise ls node --installed 2>/dev/null | awk '{print $1}'); do
+            check_interrupt
             echo "→ mise $ver"
             timeout "$TIMEOUT" mise exec "node@$ver" -- npm ls -g --depth=0 2>/dev/null | tail -n +2 || true
         done
