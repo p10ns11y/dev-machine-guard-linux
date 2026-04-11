@@ -1,0 +1,11 @@
+{
+  "name": "test-project-2",
+  "version": "2.0.0",
+  "dependencies": {
+    "axios": "0.21.4",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0"
+  }
+}

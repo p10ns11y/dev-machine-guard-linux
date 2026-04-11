@@ -52,6 +52,51 @@ else
     log_fail "Exclude-dir failed"
 fi
 
+# Test 4: Multi-project scan finds packages in both projects
+echo "Test 4: Multi-project scan"
+output=$(timeout 30 bash "$MAIN_SCRIPT" --package axios --search-path "$FIXTURES" --no-ide --no-ai 2>&1) || true
+if echo "$output" | grep -qi "project1" && echo "$output" | grep -qi "project2"; then
+    log_pass "Multi-project scan works"
+else
+    log_fail "Multi-project scan failed"
+fi
+
+# Test 5: Version comparison across projects
+echo "Test 5: Version comparison"
+output=$(timeout 30 bash "$MAIN_SCRIPT" --package axios --search-path "$FIXTURES" --no-ide --no-ai 2>&1) || true
+if echo "$output" | grep -qi "1.14" && echo "$output" | grep -qi "0.21"; then
+    log_pass "Version comparison works"
+else
+    log_fail "Version comparison failed"
+fi
+
+# Test 6: Different packages in project2 only
+echo "Test 6: Project2 unique package"
+output=$(timeout 30 bash "$MAIN_SCRIPT" --package react --search-path "$FIXTURES/project2" --no-ide --no-ai 2>&1) || true
+if echo "$output" | grep -qi "react"; then
+    log_pass "Project2 unique package found"
+else
+    log_fail "Project2 unique package not found"
+fi
+
+# Test 7: Project1 unique package (lodash not in project2)
+echo "Test 7: Project1 unique package"
+output=$(timeout 30 bash "$MAIN_SCRIPT" --package lodash --search-path "$FIXTURES/project1" --no-ide --no-ai 2>&1) || true
+if echo "$output" | grep -qi "lodash"; then
+    log_pass "Project1 unique package found"
+else
+    log_fail "Project1 unique package not found"
+fi
+
+# Test 8: Non-existent package returns no matches
+echo "Test 8: Non-existent package"
+output=$(timeout 30 bash "$MAIN_SCRIPT" --package nonexistentpkg --search-path "$FIXTURES" --no-ide --no-ai 2>&1) || true
+if ! echo "$output" | grep -qi "MATCH"; then
+    log_pass "Non-existent package handled"
+else
+    log_fail "Non-existent package false positive"
+fi
+
 # Summary
 echo
 echo "=== Summary ==="
