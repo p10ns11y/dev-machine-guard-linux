@@ -112,7 +112,7 @@ get_search_root() {
     if [ ${#SEARCH_PATHS[@]} -gt 0 ]; then
         printf '%s\n' "${SEARCH_PATHS[@]}"
     else
-        echo "~"
+        echo "$HOME"
     fi
 }
 
@@ -150,10 +150,12 @@ scan_node() {
             print "${DIM}Searching for any ${PACKAGE_NAME} (showing actual version)${RESET}"
         fi
 
+        local search_root
+        search_root=$(get_search_root)
         local excl
         excl=$(exclude_args)
         # shellcheck disable=SC2086
-        find ~ -type f \(  \
+        find $search_root -type f \(  \
             -name package-lock.json -o \
             -name pnpm-lock.yaml -o \
             -name bun.lockb -o \
