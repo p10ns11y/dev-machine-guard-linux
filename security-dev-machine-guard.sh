@@ -145,12 +145,6 @@ if [ "$DRY_RUN" = true ]; then
     exit 0
 fi
 
-if [ "$SCAN_ALL_MODE" = false ] && [ -z "$PACKAGE_NAME" ]; then
-    echo "Error: No package specified. Use --package NAME or --all to scan everything."
-    echo "       Run with --help for full options."
-    exit 1
-fi
-
 if [ "$SCAN_ALL_MODE" = true ]; then
     print "${DIM}⚠️  Full scan mode enabled - this may take a while. Press Ctrl+C to cancel.${RESET}"
 fi
@@ -251,11 +245,16 @@ scan_node() {
         done
     fi
     if command -v mise >/dev/null 2>&1; then
-        for ver in $(timeout "$TIMEOUT" mise ls node --installed 2>/dev/null | awk '{print $1}'); do
+        mise_versions=$(timeout "$TIMEOUT" mise ls node --installed 2>/dev/null)
+        set +e
+        echo "$mise_versions" | while read -r line; do
+            ver=$(echo "$line" | awk '{print $2}')
+            [ -z "$ver" ] && continue
             check_interrupt
             echo "→ mise $ver"
             timeout "$TIMEOUT" mise exec "node@$ver" -- npm ls -g --depth=0 2>/dev/null | tail -n +2 || true
         done
+        set -e
     fi
 }
 
