@@ -183,11 +183,14 @@ scan_node() {
     fi
 
     print "${DIM}Global packages across nvm + mise...${RESET}"
-    if command -v nvm >/dev/null 2>&1; then
-        for ver in $(timeout "$TIMEOUT" nvm ls --no-colors 2>/dev/null | grep -E 'v[0-9]' | awk '{print $1}'); do
-            timeout "$TIMEOUT" nvm use "$ver" --silent 2>/dev/null || continue
-            echo "→ nvm $ver"
-            timeout "$TIMEOUT" npm ls -g --depth=0 2>/dev/null | tail -n +2 || true
+    if [ -d "${NVM_DIR:-$HOME/.nvm}" ]; then
+        nvm_dir="${NVM_DIR:-$HOME/.nvm}"
+        for ver in "$nvm_dir"/versions/node/*; do
+            [ -d "$ver" ] || continue
+            ver_name=$(basename "$ver")
+            echo "→ nvm $ver_name"
+            timeout "$TIMEOUT" "$ver_name/bin/node" -v 2>/dev/null || true
+            timeout "$TIMEOUT" "$ver_name/bin/npm" ls -g --depth=0 2>/dev/null | tail -n +2 || true
         done
     fi
     if command -v mise >/dev/null 2>&1; then
