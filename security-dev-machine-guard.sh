@@ -10,17 +10,13 @@ shopt -s inherit_ubsan 2>/dev/null || true
 INTERRUPTED=false
 interrupt_handler() {
     INTERRUPTED=true
-    touch /tmp/devguard_interrupted
     echo -e "${YELLOW}⚠️  Scan interrupted by user. Cleaning up...${RESET}" >&2
     exit 130
 }
 trap 'interrupt_handler' INT TERM
 
 check_interrupt() {
-    if [ -f /tmp/devguard_interrupted ]; then
-        echo -e "${YELLOW}⚠️  Scan interrupted by user.${RESET}" >&2
-        exit 130
-    fi
+    [ "$INTERRUPTED" = true ] && exit 130
 }
 
 CONFIG_FILE="${HOME}/.devguardrc"
@@ -118,6 +114,37 @@ apply_colors
 print() { [ "$QUIET" = true ] && return; echo -e "$*"; }
 
 # ----------------------------- INPUT VALIDATION ------------------------------
+for detector in "${EXTRA_DETECTORS[@]}"; do
+    if [ -f "$detector" ]; then
+        # shellcheck source=/dev/null
+        source "$detector"
+        print "${DIM}Loaded extra detector: $detector${RESET}"
+    else
+        print "${RED}Warning: Detector file not found: $detector${RESET}"
+    fi
+done
+
+if [ "$DRY_RUN" = true ]; then
+    if [ "$OUTPUT_FORMAT" = "json" ]; then
+        if [ -n "$PACKAGE_NAME" ]; then
+            echo "{\"tool\":\"devguard\",\"package\":\"$PACKAGE_NAME\",\"status\":\"dry-run\"}"
+        else
+            echo "{\"tool\":\"devguard\",\"status\":\"dry-run\"}"
+        fi
+        exit 0
+    fi
+    print "${BOLD}Dry run - would scan:${RESET}"
+    [ "$ENABLE_NODE" = true ] && print "  • Node.js packages (npm/pnpm/bun/yarn + nvm/mise)"
+    [ "$ENABLE_IDE" = true ] && print "  • IDE extensions"
+    [ "$ENABLE_AI" = true ] && print "  • AI coding agents"
+    [ -n "$PACKAGE_NAME" ] && print "  • Package: $PACKAGE_NAME${PACKAGE_VERSION:+" (version: $PACKAGE_VERSION)"}"
+    [ ${#SEARCH_PATHS[@]} -gt 0 ] && print "  • Search paths: ${SEARCH_PATHS[*]}"
+    [ ${#EXCLUDE_DIRS[@]} -gt 0 ] && print "  • Excluding: ${EXCLUDE_DIRS[*]}"
+    [ ${#EXTRA_DETECTORS[@]} -gt 0 ] && print "  • Extra detectors: ${EXTRA_DETECTORS[*]}"
+    print "\n${GREEN}✅ Dry run complete.${RESET}"
+    exit 0
+fi
+
 if [ "$SCAN_ALL_MODE" = false ] && [ -z "$PACKAGE_NAME" ]; then
     echo "Error: No package specified. Use --package NAME or --all to scan everything."
     echo "       Run with --help for full options."
@@ -144,29 +171,21 @@ fi
 get_search_root() {
     if [ ${#SEARCH_PATHS[@]} -gt 0 ]; then
         printf '%s\n' "${SEARCH_PATHS[@]}"
+    elif [ -n "${SEARCH_PATH:-}" ]; then
+        echo "$SEARCH_PATH"
     else
-        echo "$HOME"
+        echo "."
     fi
 }
 
 exclude_args() {
-    local args="-not -path '*/Trash/*' -not -path '*/node_modules/*'"
+    local result=""
+    result="${result} -not -path '*/Trash/*' -not -path '*/node_modules/*'"
     for d in "${EXCLUDE_DIRS[@]:-}"; do
-        [ -n "$d" ] && args="$args -not -path '*/$d/*'"
+        [ -n "$d" ] && result="$result -not -path '*/$d/*'"
     done
-    echo "$args"
+    echo "$result"
 }
-
-# ----------------------------- LOAD EXTRA DETECTORS --------------------------
-for detector in "${EXTRA_DETECTORS[@]}"; do
-    if [ -f "$detector" ]; then
-        # shellcheck source=/dev/null
-        source "$detector"
-        print "${DIM}Loaded extra detector: $detector${RESET}"
-    else
-        print "${RED}Warning: Detector file not found: $detector${RESET}"
-    fi
-done
 
 # =============================================================================
 # CORE DETECTORS
@@ -174,39 +193,30 @@ done
 scan_node() {
     print "${BOLD}→ Node.js packages (npm/pnpm/bun/yarn + nvm/mise)${RESET}"
 
-    if [ -n "$PACKAGE_NAME" ]; then
-        if [ -n "$PACKAGE_VERSION" ]; then
-            pattern="(${PACKAGE_NAME}[\"']?\s*:\s*[\"']?${PACKAGE_VERSION})|(${PACKAGE_NAME}@${PACKAGE_VERSION})|(\"version\"\s*:\s*[\"']?${PACKAGE_VERSION})"
-            print "${DIM}Searching for: ${PACKAGE_NAME} version matching ${PACKAGE_VERSION}${RESET}"
-        else
-            pattern="${PACKAGE_NAME}"
-            print "${DIM}Searching for any ${PACKAGE_NAME} (showing actual version)${RESET}"
-        fi
-
-        local search_root
-        search_root=$(get_search_root)
-        local excl
-        excl=$(exclude_args)
-        # shellcheck disable=SC2086
-        find $search_root -type f \(  \
-            -name package-lock.json -o \
-            -name pnpm-lock.yaml -o \
-            -name bun.lockb -o \
-            -name yarn.lock -o \
-            -name package.json \
-        \) $excl 2>/dev/null | while read -r f; do
-            check_interrupt
-
-            if grep -qE "$pattern" "$f" 2>/dev/null; then
-                if [ -z "$PACKAGE_VERSION" ]; then
-                    version=$(grep -oE "${PACKAGE_NAME}[^\"']*[\"']?\s*:\s*[\"']?[^\"',}]+" "$f" 2>/dev/null | head -1 || echo "unknown")
-                    print "${RED}⚠️  MATCH${RESET} → $f  ${DIM}(version: ${version#*: })${RESET}"
-                else
-                    print "${RED}⚠️  MATCH${RESET} → $f"
-                fi
+global_pattern="${PACKAGE_NAME}"
+        if [ -n "$PACKAGE_NAME" ]; then
+            if [ -n "$PACKAGE_VERSION" ]; then
+                global_pattern="(${PACKAGE_NAME}[\"']?\s*:\s*[\"']?${PACKAGE_VERSION})|(${PACKAGE_NAME}@${PACKAGE_VERSION})|(\"version\"\s*:\s*[\"']?${PACKAGE_VERSION})"
+                print "${DIM}Searching for: ${PACKAGE_NAME} version matching ${PACKAGE_VERSION}${RESET}"
+            else
+                global_pattern="${PACKAGE_NAME}"
+                print "${DIM}Searching for any ${PACKAGE_NAME} (showing actual version)${RESET}"
             fi
-        done
-else
+
+search_root=$(get_search_root)
+            for dir in $search_root; do
+                for f in "$dir"/package.json "$dir"/package-lock.json "$dir"/pnpm-lock.yaml "$dir"/bun.lockb "$dir"/yarn.lock; do
+                    [ -f "$f" ] || continue
+
+                    grep -qE "$global_pattern" "$f" || continue
+                    if [ -z "$PACKAGE_VERSION" ]; then
+                        version=$(grep -oE "${PACKAGE_NAME}[^\"']*[\"']?\s*:\s*[\"']?[^\"',}]+" "$f" 2>/dev/null | head -1 || echo "unknown")
+                        print "${RED}⚠️  MATCH${RESET} → $f  ${DIM}(version: ${version#*: })${RESET}"
+                    else
+                        print "${RED}⚠️  MATCH${RESET} → $f"
+                    fi
+                done
+            done
         if [ "$LIMIT" -gt 0 ] 2>/dev/null; then
             print "${DIM}Listing direct dependencies (limited to ${LIMIT} projects)...${RESET}"
         else
@@ -296,18 +306,6 @@ run_extra_detectors() {
 # MAIN
 # =============================================================================
 main() {
-    if [ "$DRY_RUN" = true ]; then
-        print "${BOLD}Dry run - would scan:${RESET}"
-        [ "$ENABLE_NODE" = true ] && print "  • Node.js packages (npm/pnpm/bun/yarn + nvm/mise)"
-        [ "$ENABLE_IDE" = true ] && print "  • IDE extensions"
-        [ "$ENABLE_AI" = true ] && print "  • AI coding agents"
-        [ -n "$PACKAGE_NAME" ] && print "  • Package: $PACKAGE_NAME${PACKAGE_VERSION:+" (version: $PACKAGE_VERSION)"}"
-        [ ${#SEARCH_PATHS[@]} -gt 0 ] && print "  • Search paths: ${SEARCH_PATHS[*]}"
-        [ ${#EXCLUDE_DIRS[@]} -gt 0 ] && print "  • Excluding: ${EXCLUDE_DIRS[*]}"
-        print "\n${GREEN}✅ Dry run complete.${RESET}"
-        exit 0
-    fi
-
     print "${BOLD}DevGuard Scanner${RESET} | $(uname -s) | User: $USER"
     echo
 
@@ -317,7 +315,9 @@ main() {
     run_extra_detectors   # ← calls any loaded detectors
 
     if [ "$OUTPUT_FORMAT" = "json" ]; then
-        echo "{\"tool\":\"devguard\",\"package\":\"$PACKAGE_NAME\",\"status\":\"complete\"}"
+        local pkg_json=""
+        [ -n "$PACKAGE_NAME" ] && pkg_json=",\"package\":\"$PACKAGE_NAME\""
+        echo "{\"tool\":\"devguard\"${pkg_json},\"status\":\"complete\"}"
     else
         print "\n${GREEN}✅ Scan complete.${RESET}"
         print "${DIM}Run with --help for full options${RESET}"
