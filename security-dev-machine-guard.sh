@@ -199,8 +199,8 @@ scan_node() {
             print "${DIM}Searching for any ${PACKAGE_NAME} (showing actual version)${RESET}"
         fi
 
-        local excl
-        excl=$(exclude_args)
+        search_root=$(get_search_root)
+
         # shellcheck disable=SC2086
         while IFS= read -r f; do
             grep -qE "$global_pattern" "$f" || continue
@@ -210,7 +210,7 @@ scan_node() {
             else
                 print "${RED}⚠️  MATCH${RESET} → $f"
             fi
-        done < <(find ~ -name package.json $excl 2>/dev/null)
+        done < <(find $search_root -name package.json $excl 2>/dev/null)
     fi
 
     if [ "$SCAN_ALL_MODE" = true ]; then
@@ -229,7 +229,7 @@ scan_node() {
             dir=$(dirname "$pkg")
             print "${DIM}Project ($count):${RESET} $dir"
             timeout "$TIMEOUT" bash -c "cd \"$dir\" && npm ls --depth=0" 2>/dev/null | tail -n +2 || true
-        done < <(find ~ -name package.json $excl 2>/dev/null)
+        done < <(find $search_root -name package.json $excl 2>/dev/null)
         set -e
     fi
 
