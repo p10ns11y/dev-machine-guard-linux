@@ -174,7 +174,7 @@ get_search_root() {
     elif [ -n "${SEARCH_PATH:-}" ]; then
         echo "$SEARCH_PATH"
     else
-        echo "."
+        echo ~
     fi
 }
 
@@ -193,30 +193,30 @@ exclude_args() {
 scan_node() {
     print "${BOLD}→ Node.js packages (npm/pnpm/bun/yarn + nvm/mise)${RESET}"
 
-global_pattern="${PACKAGE_NAME}"
-        if [ -n "$PACKAGE_NAME" ]; then
-            if [ -n "$PACKAGE_VERSION" ]; then
-                global_pattern="(${PACKAGE_NAME}[\"']?\s*:\s*[\"']?${PACKAGE_VERSION})|(${PACKAGE_NAME}@${PACKAGE_VERSION})|(\"version\"\s*:\s*[\"']?${PACKAGE_VERSION})"
-                print "${DIM}Searching for: ${PACKAGE_NAME} version matching ${PACKAGE_VERSION}${RESET}"
+    if [ -n "$PACKAGE_NAME" ]; then
+        if [ -n "$PACKAGE_VERSION" ]; then
+            global_pattern="(${PACKAGE_NAME}[\"']?\s*:\s*[\"']?${PACKAGE_VERSION})|(${PACKAGE_NAME}@${PACKAGE_VERSION})|(\"version\"\s*:\s*[\"']?${PACKAGE_VERSION})"
+            print "${DIM}Searching for: ${PACKAGE_NAME} version matching ${PACKAGE_VERSION}${RESET}"
+        else
+            global_pattern="${PACKAGE_NAME}"
+            print "${DIM}Searching for any ${PACKAGE_NAME} (showing actual version)${RESET}"
+        fi
+
+        local excl
+        excl=$(exclude_args)
+        # shellcheck disable=SC2086
+        while IFS= read -r f; do
+            grep -qE "$global_pattern" "$f" || continue
+            if [ -z "$PACKAGE_VERSION" ]; then
+                version=$(grep -oE "${PACKAGE_NAME}[^\"']*[\"']?\s*:\s*[\"']?[^\"',}]+" "$f" 2>/dev/null | head -1 || echo "unknown")
+                print "${RED}⚠️  MATCH${RESET} → $f  ${DIM}(version: ${version#*: })${RESET}"
             else
-                global_pattern="${PACKAGE_NAME}"
-                print "${DIM}Searching for any ${PACKAGE_NAME} (showing actual version)${RESET}"
+                print "${RED}⚠️  MATCH${RESET} → $f"
             fi
+        done < <(find ~ -name package.json $excl 2>/dev/null)
+    fi
 
-search_root=$(get_search_root)
-            for dir in $search_root; do
-                for f in "$dir"/package.json "$dir"/package-lock.json "$dir"/pnpm-lock.yaml "$dir"/bun.lockb "$dir"/yarn.lock; do
-                    [ -f "$f" ] || continue
-
-                    grep -qE "$global_pattern" "$f" || continue
-                    if [ -z "$PACKAGE_VERSION" ]; then
-                        version=$(grep -oE "${PACKAGE_NAME}[^\"']*[\"']?\s*:\s*[\"']?[^\"',}]+" "$f" 2>/dev/null | head -1 || echo "unknown")
-                        print "${RED}⚠️  MATCH${RESET} → $f  ${DIM}(version: ${version#*: })${RESET}"
-                    else
-                        print "${RED}⚠️  MATCH${RESET} → $f"
-                    fi
-                done
-            done
+    if [ "$SCAN_ALL_MODE" = true ]; then
         if [ "$LIMIT" -gt 0 ] 2>/dev/null; then
             print "${DIM}Listing direct dependencies (limited to ${LIMIT} projects)...${RESET}"
         else
@@ -226,14 +226,16 @@ search_root=$(get_search_root)
         excl=$(exclude_args)
         local count=0
         # shellcheck disable=SC2086
-        for pkg in $(find ~ -name package.json $excl 2>/dev/null); do
+        set +e
+        while IFS= read -r pkg; do
             check_interrupt
             [ "$LIMIT" -gt 0 ] 2>/dev/null && [ "$count" -ge "$LIMIT" ] && break
             count=$((count + 1))
             dir=$(dirname "$pkg")
-            print "${DIM}Project:${RESET} $dir"
+            print "${DIM}Project ($count):${RESET} $dir"
             timeout "$TIMEOUT" bash -c "cd \"$dir\" && npm ls --depth=0" 2>/dev/null | tail -n +2 || true
-        done
+        done < <(find ~ -name package.json $excl 2>/dev/null)
+        set -e
     fi
 
     print "${DIM}Global packages across nvm + mise...${RESET}"
