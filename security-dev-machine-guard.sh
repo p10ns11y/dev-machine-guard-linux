@@ -190,6 +190,8 @@ scan_node() {
     local excl
     excl=$(exclude_args)
 
+    search_root=$(get_search_root)
+
     if [ -n "$PACKAGE_NAME" ]; then
         if [ -n "$PACKAGE_VERSION" ]; then
             global_pattern="(${PACKAGE_NAME}[\"']?\s*:\s*[\"']?${PACKAGE_VERSION})|(${PACKAGE_NAME}@${PACKAGE_VERSION})|(\"version\"\s*:\s*[\"']?${PACKAGE_VERSION})"
@@ -198,8 +200,6 @@ scan_node() {
             global_pattern="${PACKAGE_NAME}"
             print "${DIM}Searching for any ${PACKAGE_NAME} (showing actual version)${RESET}"
         fi
-
-        search_root=$(get_search_root)
 
         # shellcheck disable=SC2086
         while IFS= read -r f; do
