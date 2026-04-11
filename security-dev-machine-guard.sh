@@ -187,6 +187,9 @@ exclude_args() {
 scan_node() {
     print "${BOLD}→ Node.js packages (npm/pnpm/bun/yarn + nvm/mise)${RESET}"
 
+    local excl
+    excl=$(exclude_args)
+
     if [ -n "$PACKAGE_NAME" ]; then
         if [ -n "$PACKAGE_VERSION" ]; then
             global_pattern="(${PACKAGE_NAME}[\"']?\s*:\s*[\"']?${PACKAGE_VERSION})|(${PACKAGE_NAME}@${PACKAGE_VERSION})|(\"version\"\s*:\s*[\"']?${PACKAGE_VERSION})"
@@ -216,8 +219,6 @@ scan_node() {
         else
             print "${DIM}Listing direct dependencies from all projects...${RESET}"
         fi
-        local excl
-        excl=$(exclude_args)
         local count=0
         # shellcheck disable=SC2086
         set +e
