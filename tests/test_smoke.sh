@@ -65,7 +65,7 @@ fi
 
 # Test 5: Color mode never
 echo "Test 5: Color mode never"
-output=$(run_quiet_long --color never 2>&1) || true
+output=$(run_quiet_long --color never --dry-run 2>&1) || true
 if ! echo "$output" | grep -qE '\\033'; then
     log_pass "Color disabled"
 else
