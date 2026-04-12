@@ -19,3 +19,17 @@
 
 # Temporary files
 todo-remove/
+
+# Rust
+target/
+
+# Zig
+zig-out/
+zig-cache/
+
+# Go
+devguard
+
+# Ada/SPARK
+*.ali
+*.o

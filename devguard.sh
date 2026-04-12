@@ -11,6 +11,8 @@ shopt -s inherit_ubsan 2>/dev/null || true
 readonly SCRIPT_NAME="${0##*/}"
 readonly SCRIPT_VERSION="1.0.0"
 readonly CONFIG_FILE="${HOME}/.devguardrc"
+readonly CACHE_DIR="${HOME}/.cache/devguard"
+readonly CACHE_TTL=3600  # 1 hour cache TTL
 
 declare -g INTERRUPTED=false
 declare -g EXIT_CODE=0
@@ -93,6 +95,50 @@ spinner() {
         printf "\r"
     done
     printf " %-50s\n" "✓ $message"
+}
+
+# Parallel find helper - use xargs/parallel for better performance
+parallel_find() {
+    local search_root="$1"
+    local pattern="$2"
+    local exclude_args="$3"
+
+    if command -v parallel >/dev/null 2>&1; then
+        # Use GNU parallel for maximum performance
+        find "$search_root" -type f \( $pattern \) $exclude_args -print0 2>/dev/null | parallel -0 -j+0 --no-notice echo
+    elif command -v xargs >/dev/null 2>&1; then
+        # Use xargs for parallelism
+        find "$search_root" -type f \( $pattern \) $exclude_args -print0 2>/dev/null | xargs -0 -n1 -P4 echo
+    else
+        # Fallback to regular find
+        find "$search_root" -type f \( $pattern \) $exclude_args 2>/dev/null
+    fi
+}
+
+# Cache management functions
+ensure_cache_dir() {
+    mkdir -p "$CACHE_DIR" 2>/dev/null || true
+}
+
+cache_key() {
+    local content="$1"
+    printf '%s' "$content" | sha256sum | cut -d' ' -f1
+}
+
+is_cache_valid() {
+    local cache_file="$1"
+    [[ -f "$cache_file" ]] && [[ $(( $(date +%s) - $(stat -c %Y "$cache_file" 2>/dev/null || echo 0) )) -lt $CACHE_TTL ]]
+}
+
+read_cache() {
+    local cache_file="$1"
+    [[ -f "$cache_file" ]] && cat "$cache_file"
+}
+
+write_cache() {
+    local cache_file="$1"
+    ensure_cache_dir
+    cat > "$cache_file"
 }
 
 # ------------------------------ CLI PARSING -----------------------------
@@ -242,10 +288,22 @@ scan_node_packages() {
             emit "${D}Searching for any $PACKAGE_NAME (showing version)${X}"
         fi
         
+        # Use cached find results if available
+        local cache_key_str="${search_root}|${excl}|package.json"
+        local cache_file="$CACHE_DIR/$(cache_key "$cache_key_str")"
+
+        if is_cache_valid "$cache_file"; then
+            emit "${D}Using cached package.json locations${X}"
+        else
+            emit "${D}Scanning for package.json files...${X}"
+            find $search_root -name package.json $excl 2>/dev/null | write_cache "$cache_file"
+        fi
+
         while IFS= read -r pkg_file; do
             check_interrupt
+            [[ -z "$pkg_file" ]] && continue
             grep -qE "$pattern" "$pkg_file" || continue
-            
+
             local version
             if [[ -z "$PACKAGE_VERSION" ]]; then
                 version=$(grep -oE "${PACKAGE_NAME}[^\"']*[\"']?\s*:\s*[\"']?[^\"',}]+" "$pkg_file" 2>/dev/null | head -1 || echo "unknown")
@@ -253,7 +311,7 @@ scan_node_packages() {
             else
                 emit "${R}⚠ MATCH${X} → $pkg_file"
             fi
-        done < <(find $search_root -name package.json $excl 2>/dev/null)
+        done < <(read_cache "$cache_file")
     fi
     
     if [[ "$SCAN_ALL_MODE" == true ]]; then
@@ -262,14 +320,15 @@ scan_node_packages() {
         local count=0
         while IFS= read -r pkg_file; do
             check_interrupt
+            [[ -z "$pkg_file" ]] && continue
             [[ "$LIMIT_COUNT" -gt 0 ]] && [[ "$count" -ge "$LIMIT_COUNT" ]] && break
-            
+
             count=$((count + 1))
             local dir
             dir=$(dirname "$pkg_file")
             emit "${D}Project ($count):${X} $dir"
             timeout "$TIMEOUT_SECS" bash -c "cd \"$dir\" && npm ls --depth=0" 2>/dev/null | tail -n +2 || true
-        done < <(find $search_root -name package.json $excl 2>/dev/null)
+        done < <(read_cache "$cache_file")
     fi
     
     emit "${D}Global packages from nvm + mise...${X}"
